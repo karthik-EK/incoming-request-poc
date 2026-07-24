@@ -1,0 +1,34 @@
+[
+  {
+    "subject": "Charged twice for my invoice",
+    "classification": "complaint",
+    "urgency": "high",
+    "status": "escalated",
+    "assigned_team": "Customer Recovery",
+    "actions": ["Acknowledge complaint", "Escalate to senior handler", "Create priority case log", "Set 2-hour follow-up"]
+  },
+  {
+    "subject": "Question about available billing plans",
+    "classification": "general_enquiry",
+    "urgency": "low",
+    "status": "resolved",
+    "assigned_team": "Knowledge Operations",
+    "actions": ["Classify enquiry sub-topic", "Generate knowledge response", "Mark as resolved"]
+  },
+  {
+    "subject": "Please activate service for new location",
+    "classification": "service_request",
+    "urgency": "medium",
+    "status": "in_progress",
+    "assigned_team": "Service Fulfillment",
+    "actions": ["Extract required details", "Route to department", "Generate confirmation", "Set SLA timer"]
+  },
+  {
+    "subject": "Urgent suspected fraud on account",
+    "classification": "escalation_urgent",
+    "urgency": "critical",
+    "status": "human_review",
+    "assigned_team": "Supervisor Desk",
+    "actions": ["Flag for human review", "Draft urgent acknowledgement", "Notify supervisor", "Pause auto-resolution"]
+  }
+]

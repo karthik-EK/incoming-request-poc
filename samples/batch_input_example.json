@@ -1,0 +1,16 @@
+[
+  {
+    "subject": "Need password reset for account",
+    "requester_name": "Priya Mehta",
+    "requester_email": "priya.mehta@example.com",
+    "channel": "web_form",
+    "description": "Please reset my account access and update the admin contact."
+  },
+  {
+    "subject": "Unacceptable delay and refund request",
+    "requester_name": "Jon Reed",
+    "requester_email": "jon.reed@example.com",
+    "channel": "email",
+    "description": "This complaint has not been handled. The billing dispute is unacceptable and I want a refund today."
+  }
+]
