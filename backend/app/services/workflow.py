@@ -1,141 +1,140 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from app.database import Base
+from app.models import WorkflowAction
+from app.services.classifier import ClassificationResult
 
 
 def utc_now():
     return datetime.now(timezone.utc)
 
 
-class Ticket(Base):
-    __tablename__ = "tickets"
+def format_time(dt: datetime):
+    return dt.strftime("%d %b %Y, %I:%M %p UTC")
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    subject: Mapped[str] = mapped_column(String(180), nullable=False)
-    requester_name: Mapped[str] = mapped_column(String(120), nullable=False)
-    requester_email: Mapped[str] = mapped_column(String(180), nullable=False)
-    channel: Mapped[str] = mapped_column(String(40), default="web_form")
-    description: Mapped[str] = mapped_column(Text, nullable=False)
+def execute_workflow(ticket, classification: ClassificationResult):
+    branch = WORKFLOWS[classification.classification]
 
-    classification: Mapped[str] = mapped_column(String(60), index=True)
-    urgency: Mapped[str] = mapped_column(String(30), index=True)
-    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    context = branch(ticket, classification)
 
-    status: Mapped[str] = mapped_column(String(40), default="open", index=True)
-
-    assigned_team: Mapped[str] = mapped_column(
-        String(80),
-        default="Operations Triage",
+    ticket.assigned_team = context["assigned_team"]
+    ticket.status = context["status"]
+    ticket.draft_response = context["draft_response"]
+    ticket.follow_up_at = context.get("follow_up_at")
+    ticket.sla_due_at = context.get("sla_due_at")
+    ticket.action_summary = " -> ".join(
+        action["name"] for action in context["actions"]
     )
 
-    draft_response: Mapped[str] = mapped_column(Text, default="")
-    action_summary: Mapped[str] = mapped_column(Text, default="")
-    ai_rationale: Mapped[str] = mapped_column(Text, default="")
-    subtopic: Mapped[str] = mapped_column(String(100), default="General")
+    return [
+        WorkflowAction(
+            sequence=index + 1,
+            name=action["name"],
+            status="completed",
+            output=action["output"],
+        )
+        for index, action in enumerate(context["actions"])
+    ]
 
-    follow_up_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    sla_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+def complaint(ticket, classification):
+    follow_up = utc_now() + timedelta(hours=2)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=utc_now,
-        index=True,
+    response = (
+        f"Hello {ticket.requester_name}, we received your complaint "
+        f"regarding {classification.subtopic.lower()}."
     )
 
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=utc_now,
-        onupdate=utc_now,
-    )
-
-    actions: Mapped[list["WorkflowAction"]] = relationship(
-        "WorkflowAction",
-        back_populates="ticket",
-        cascade="all, delete-orphan",
-        order_by="WorkflowAction.sequence",
-    )
-
-    audit_logs: Mapped[list["AuditLog"]] = relationship(
-        "AuditLog",
-        back_populates="ticket",
-        cascade="all, delete-orphan",
-        order_by="AuditLog.created_at",
-    )
-
-
-class WorkflowAction(Base):
-    __tablename__ = "workflow_actions"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-
-    ticket_id: Mapped[int] = mapped_column(
-        ForeignKey("tickets.id"),
-        index=True,
-    )
-
-    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
-
-    name: Mapped[str] = mapped_column(String(120), nullable=False)
-
-    status: Mapped[str] = mapped_column(String(40), default="completed")
-
-    output: Mapped[str] = mapped_column(Text, default="")
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=utc_now,
-    )
-
-    ticket: Mapped["Ticket"] = relationship(
-        "Ticket",
-        back_populates="actions",
-    )
+    return {
+        "assigned_team": "Customer Recovery",
+        "status": "escalated",
+        "draft_response": response,
+        "follow_up_at": follow_up,
+        "sla_due_at": follow_up,
+        "actions": [
+            {
+                "name": "Acknowledge Complaint",
+                "output": response,
+            },
+            {
+                "name": "Escalate",
+                "output": "Escalated to Customer Recovery",
+            },
+            {
+                "name": "Follow-up",
+                "output": f"Follow-up scheduled for {format_time(follow_up)}",
+            },
+        ],
+    }
 
 
-class AuditLog(Base):
-    __tablename__ = "audit_logs"
+def general(ticket, classification):
+    sla = utc_now() + timedelta(days=2)
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    return {
+        "assigned_team": "Knowledge Operations",
+        "status": "resolved",
+        "draft_response": "General enquiry response generated.",
+        "follow_up_at": None,
+        "sla_due_at": sla,
+        "actions": [
+            {
+                "name": "Knowledge Search",
+                "output": "Knowledge article generated.",
+            },
+            {
+                "name": "Resolve",
+                "output": "Marked as resolved.",
+            },
+        ],
+    }
 
-    ticket_id: Mapped[int | None] = mapped_column(
-        ForeignKey("tickets.id"),
-        nullable=True,
-        index=True,
-    )
 
-    event_type: Mapped[str] = mapped_column(
-        String(80),
-        nullable=False,
-        index=True,
-    )
+def service(ticket, classification):
+    sla = utc_now() + timedelta(hours=24)
 
-    actor: Mapped[str] = mapped_column(
-        String(80),
-        default="system",
-    )
+    return {
+        "assigned_team": "Service Fulfillment",
+        "status": "in_progress",
+        "draft_response": "Service request received.",
+        "follow_up_at": utc_now() + timedelta(hours=12),
+        "sla_due_at": sla,
+        "actions": [
+            {
+                "name": "Route Request",
+                "output": "Assigned to Service Fulfillment",
+            },
+            {
+                "name": "SLA Started",
+                "output": f"SLA until {format_time(sla)}",
+            },
+        ],
+    }
 
-    message: Mapped[str] = mapped_column(
-        Text,
-        nullable=False,
-    )
 
-    metadata_json: Mapped[str] = mapped_column(
-        Text,
-        default="{}",
-    )
+def urgent(ticket, classification):
+    return {
+        "assigned_team": "Supervisor Desk",
+        "status": "human_review",
+        "draft_response": "Urgent request forwarded for review.",
+        "follow_up_at": utc_now() + timedelta(minutes=30),
+        "sla_due_at": utc_now() + timedelta(hours=1),
+        "actions": [
+            {
+                "name": "Human Review",
+                "output": "Supervisor notified",
+            },
+            {
+                "name": "Pause Automation",
+                "output": "Waiting for supervisor decision",
+            },
+        ],
+    }
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=utc_now,
-        index=True,
-    )
 
-    ticket: Mapped["Ticket | None"] = relationship(
-        "Ticket",
-        back_populates="audit_logs",
-    )
+WORKFLOWS = {
+    "complaint": complaint,
+    "general_enquiry": general,
+    "service_request": service,
+    "escalation_urgent": urgent,
+}
