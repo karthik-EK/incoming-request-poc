@@ -1,20 +1,23 @@
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from app.models import WorkflowAction
 from app.services.classifier import ClassificationResult
+
+IST = ZoneInfo("Asia/Kolkata")
 
 
 def utc_now():
     return datetime.now(timezone.utc)
 
 
-def format_time(dt: datetime):
-    return dt.strftime("%d %b %Y, %I:%M %p UTC")
+def format_time(dt: datetime) -> str:
+    """Convert UTC datetime to IST for display."""
+    return dt.astimezone(IST).strftime("%d %b %Y, %I:%M %p IST")
 
 
 def execute_workflow(ticket, classification: ClassificationResult):
     branch = WORKFLOWS[classification.classification]
-
     context = branch(ticket, classification)
 
     ticket.assigned_team = context["assigned_team"]
@@ -37,12 +40,19 @@ def execute_workflow(ticket, classification: ClassificationResult):
     ]
 
 
+# ---------------------------------------------------
+# Complaint
+# ---------------------------------------------------
 def complaint(ticket, classification):
     follow_up = utc_now() + timedelta(hours=2)
 
     response = (
-        f"Hello {ticket.requester_name}, we received your complaint "
-        f"regarding {classification.subtopic.lower()}."
+        f"Hello {ticket.requester_name},\n\n"
+        f"We have received your complaint regarding "
+        f"{classification.subtopic.lower()}.\n\n"
+        "Your case has been escalated to our Customer Recovery team "
+        "for priority handling.\n\n"
+        "You will receive an update within the next 2 hours."
     )
 
     return {
@@ -54,79 +64,139 @@ def complaint(ticket, classification):
         "actions": [
             {
                 "name": "Acknowledge Complaint",
-                "output": response,
+                "output": "Complaint acknowledgement sent.",
             },
             {
-                "name": "Escalate",
-                "output": "Escalated to Customer Recovery",
+                "name": "Escalate to Senior Handler",
+                "output": "Assigned to Customer Recovery team.",
             },
             {
-                "name": "Follow-up",
+                "name": "Create Priority Case",
+                "output": "Priority complaint case created.",
+            },
+            {
+                "name": "Schedule Follow-up",
                 "output": f"Follow-up scheduled for {format_time(follow_up)}",
             },
         ],
     }
 
 
+# ---------------------------------------------------
+# General Enquiry
+# ---------------------------------------------------
 def general(ticket, classification):
     sla = utc_now() + timedelta(days=2)
+
+    response = (
+        f"Hello {ticket.requester_name},\n\n"
+        "Thank you for contacting us.\n\n"
+        f"Your enquiry regarding {classification.subtopic.lower()} "
+        "has been reviewed.\n\n"
+        "A knowledge response has been generated and the request has "
+        "been marked as resolved."
+    )
 
     return {
         "assigned_team": "Knowledge Operations",
         "status": "resolved",
-        "draft_response": "General enquiry response generated.",
+        "draft_response": response,
         "follow_up_at": None,
         "sla_due_at": sla,
         "actions": [
             {
-                "name": "Knowledge Search",
-                "output": "Knowledge article generated.",
+                "name": "Classify Enquiry",
+                "output": f"Sub-topic identified as {classification.subtopic}",
             },
             {
-                "name": "Resolve",
-                "output": "Marked as resolved.",
+                "name": "Generate Knowledge Response",
+                "output": response,
+            },
+            {
+                "name": "Mark Resolved",
+                "output": "Ticket marked as resolved.",
             },
         ],
     }
 
 
+# ---------------------------------------------------
+# Service Request
+# ---------------------------------------------------
 def service(ticket, classification):
+    follow_up = utc_now() + timedelta(hours=12)
     sla = utc_now() + timedelta(hours=24)
+
+    response = (
+        f"Hello {ticket.requester_name},\n\n"
+        f"Your service request regarding "
+        f"{classification.subtopic.lower()} has been received.\n\n"
+        "It has been assigned to our Service Fulfillment team.\n\n"
+        "Expected completion is within 24 hours."
+    )
 
     return {
         "assigned_team": "Service Fulfillment",
         "status": "in_progress",
-        "draft_response": "Service request received.",
-        "follow_up_at": utc_now() + timedelta(hours=12),
+        "draft_response": response,
+        "follow_up_at": follow_up,
         "sla_due_at": sla,
         "actions": [
             {
-                "name": "Route Request",
-                "output": "Assigned to Service Fulfillment",
+                "name": "Extract Request Details",
+                "output": "Required request details extracted.",
             },
             {
-                "name": "SLA Started",
-                "output": f"SLA until {format_time(sla)}",
+                "name": "Route Request",
+                "output": "Assigned to Service Fulfillment.",
+            },
+            {
+                "name": "Generate Confirmation",
+                "output": response,
+            },
+            {
+                "name": "Start SLA Timer",
+                "output": f"SLA expires on {format_time(sla)}",
             },
         ],
     }
 
 
+# ---------------------------------------------------
+# Escalation / Urgent
+# ---------------------------------------------------
 def urgent(ticket, classification):
+    follow_up = utc_now() + timedelta(minutes=30)
+    sla = utc_now() + timedelta(hours=1)
+
+    response = (
+        f"Hello {ticket.requester_name},\n\n"
+        "Your urgent request has been flagged for immediate human review.\n\n"
+        "A supervisor has been notified and automated resolution has been paused."
+    )
+
     return {
         "assigned_team": "Supervisor Desk",
         "status": "human_review",
-        "draft_response": "Urgent request forwarded for review.",
-        "follow_up_at": utc_now() + timedelta(minutes=30),
-        "sla_due_at": utc_now() + timedelta(hours=1),
+        "draft_response": response,
+        "follow_up_at": follow_up,
+        "sla_due_at": sla,
         "actions": [
             {
-                "name": "Human Review",
-                "output": "Supervisor notified",
+                "name": "Flag Human Review",
+                "output": "Critical priority assigned.",
+            },
+            {
+                "name": "Notify Supervisor",
+                "output": "Supervisor notified immediately.",
             },
             {
                 "name": "Pause Automation",
-                "output": "Waiting for supervisor decision",
+                "output": "Automatic resolution paused.",
+            },
+            {
+                "name": "Set Review SLA",
+                "output": f"Review deadline: {format_time(sla)}",
             },
         ],
     }
