@@ -1,10 +1,7 @@
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 
 from app.models import WorkflowAction
 from app.services.classifier import ClassificationResult
-
-IST = ZoneInfo("Asia/Kolkata")
 
 
 def utc_now():
@@ -12,12 +9,16 @@ def utc_now():
 
 
 def format_time(dt: datetime) -> str:
-    """Convert UTC datetime to IST for display."""
-    return dt.astimezone(IST).strftime("%d %b %Y, %I:%M %p IST")
+    """
+    Format UTC time.
+    Frontend will convert UTC to IST automatically.
+    """
+    return dt.strftime("%d %b %Y, %I:%M %p UTC")
 
 
 def execute_workflow(ticket, classification: ClassificationResult):
     branch = WORKFLOWS[classification.classification]
+
     context = branch(ticket, classification)
 
     ticket.assigned_team = context["assigned_team"]
@@ -41,8 +42,9 @@ def execute_workflow(ticket, classification: ClassificationResult):
 
 
 # ---------------------------------------------------
-# Complaint
+# Complaint Workflow
 # ---------------------------------------------------
+
 def complaint(ticket, classification):
     follow_up = utc_now() + timedelta(hours=2)
 
@@ -64,35 +66,36 @@ def complaint(ticket, classification):
         "actions": [
             {
                 "name": "Acknowledge Complaint",
-                "output": "Complaint acknowledgement sent.",
+                "output": "Complaint acknowledgement sent to customer."
             },
             {
                 "name": "Escalate to Senior Handler",
-                "output": "Assigned to Customer Recovery team.",
+                "output": "Customer Recovery team assigned."
             },
             {
                 "name": "Create Priority Case",
-                "output": "Priority complaint case created.",
+                "output": "Priority complaint case created."
             },
             {
                 "name": "Schedule Follow-up",
-                "output": f"Follow-up scheduled for {format_time(follow_up)}",
+                "output": f"Follow-up scheduled for {format_time(follow_up)}"
             },
         ],
     }
 
 
 # ---------------------------------------------------
-# General Enquiry
+# General Enquiry Workflow
 # ---------------------------------------------------
+
 def general(ticket, classification):
     sla = utc_now() + timedelta(days=2)
 
     response = (
         f"Hello {ticket.requester_name},\n\n"
         "Thank you for contacting us.\n\n"
-        f"Your enquiry regarding {classification.subtopic.lower()} "
-        "has been reviewed.\n\n"
+        f"Your enquiry regarding "
+        f"{classification.subtopic.lower()} has been reviewed.\n\n"
         "A knowledge response has been generated and the request has "
         "been marked as resolved."
     )
@@ -106,23 +109,24 @@ def general(ticket, classification):
         "actions": [
             {
                 "name": "Classify Enquiry",
-                "output": f"Sub-topic identified as {classification.subtopic}",
+                "output": f"Sub-topic identified as {classification.subtopic}"
             },
             {
                 "name": "Generate Knowledge Response",
-                "output": response,
+                "output": response
             },
             {
                 "name": "Mark Resolved",
-                "output": "Ticket marked as resolved.",
+                "output": "Ticket marked as resolved."
             },
         ],
     }
 
 
 # ---------------------------------------------------
-# Service Request
+# Service Request Workflow
 # ---------------------------------------------------
+
 def service(ticket, classification):
     follow_up = utc_now() + timedelta(hours=12)
     sla = utc_now() + timedelta(hours=24)
@@ -144,27 +148,28 @@ def service(ticket, classification):
         "actions": [
             {
                 "name": "Extract Request Details",
-                "output": "Required request details extracted.",
+                "output": "Required request details extracted."
             },
             {
                 "name": "Route Request",
-                "output": "Assigned to Service Fulfillment.",
+                "output": "Assigned to Service Fulfillment."
             },
             {
                 "name": "Generate Confirmation",
-                "output": response,
+                "output": response
             },
             {
                 "name": "Start SLA Timer",
-                "output": f"SLA expires on {format_time(sla)}",
+                "output": f"SLA expires on {format_time(sla)}"
             },
         ],
     }
 
 
 # ---------------------------------------------------
-# Escalation / Urgent
+# Escalation / Urgent Workflow
 # ---------------------------------------------------
+
 def urgent(ticket, classification):
     follow_up = utc_now() + timedelta(minutes=30)
     sla = utc_now() + timedelta(hours=1)
@@ -184,19 +189,19 @@ def urgent(ticket, classification):
         "actions": [
             {
                 "name": "Flag Human Review",
-                "output": "Critical priority assigned.",
+                "output": "Critical priority assigned."
             },
             {
                 "name": "Notify Supervisor",
-                "output": "Supervisor notified immediately.",
+                "output": "Supervisor notified immediately."
             },
             {
                 "name": "Pause Automation",
-                "output": "Automatic resolution paused.",
+                "output": "Automatic resolution paused."
             },
             {
                 "name": "Set Review SLA",
-                "output": f"Review deadline: {format_time(sla)}",
+                "output": f"Review deadline: {format_time(sla)}"
             },
         ],
     }
