@@ -1,9 +1,13 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+
+def utc_now():
+    return datetime.now(timezone.utc)
 
 
 class Ticket(Base):
@@ -22,6 +26,7 @@ class Ticket(Base):
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
 
     status: Mapped[str] = mapped_column(String(40), default="open", index=True)
+
     assigned_team: Mapped[str] = mapped_column(
         String(80),
         default="Operations Triage",
@@ -33,25 +38,25 @@ class Ticket(Base):
     subtopic: Mapped[str] = mapped_column(String(100), default="General")
 
     follow_up_at: Mapped[datetime | None] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=True,
     )
 
     sla_due_at: Mapped[datetime | None] = mapped_column(
-        DateTime,
+        DateTime(timezone=True),
         nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.now,
+        DateTime(timezone=True),
+        default=utc_now,
         index=True,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.now,
-        onupdate=datetime.now,
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
     )
 
     actions: Mapped[list["WorkflowAction"]] = relationship(
@@ -97,8 +102,8 @@ class WorkflowAction(Base):
     )
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.now,
+        DateTime(timezone=True),
+        default=utc_now,
     )
 
     ticket: Mapped["Ticket"] = relationship(
@@ -140,8 +145,8 @@ class AuditLog(Base):
     )
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.now,
+        DateTime(timezone=True),
+        default=utc_now,
         index=True,
     )
 
