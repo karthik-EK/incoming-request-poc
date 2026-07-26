@@ -7,32 +7,33 @@ export function cn(...inputs: ClassValue[]) {
 
 export function labelize(value: string) {
   return value
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export function formatDate(value?: string | null) {
-  if (!value) return "Not set";
+  if (!value) return "-";
 
-  const normalizedValue = hasTimezone(value) ? value : `${value}Z`;
+  let date = new Date(value);
 
-  const date = new Date(normalizedValue);
-
+  // If backend sends datetime without timezone,
+  // treat it as UTC.
   if (isNaN(date.getTime())) {
-    return "Invalid Date";
+    date = new Date(value + "Z");
   }
 
-  return new Intl.DateTimeFormat("en-IN", {
-    year: "numeric",
+  if (isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return date.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
     month: "short",
-    day: "numeric",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     hour12: true,
-    timeZone: "Asia/Kolkata",
-  }).format(date);
-}
-
-function hasTimezone(value: string) {
-  return /(?:z|[+-]\d{2}:?\d{2})$/i.test(value);
+  });
 }
